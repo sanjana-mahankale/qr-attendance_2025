@@ -189,7 +189,7 @@ app.post('/api/create-session', async (req, res) => {
     );
 
     const session_id = result.insertId;
-    const baseUrl = process.env.BASE_URL ? process.env.BASE_URL.replace(/\/$/, '') : 'https://qr-attendance-umrh.onrender.com';
+    const baseUrl = process.env.BASE_URL ? process.env.BASE_URL.replace(/\/$/, '') : 'https://qr-attendance-2025.onrender.com';
      const qrLink = `${baseUrl}/student?session_code=${session_code}&token=${session_token}`;
     const qrDataUrl = await QRCode.toDataURL(qrLink);
 
@@ -362,7 +362,7 @@ app.get('/api/students', async (req, res) => {
 
 // Keep-alive function
 setInterval(() => {
-  const url = process.env.BASE_URL ? process.env.BASE_URL + '/testdb' : 'https://qr-attendance-umrh.onrender.com/testdb';
+  const url = process.env.BASE_URL ? process.env.BASE_URL + '/testdb' : 'https://qr-attendance-2025.onrender.com/testdb';
   https.get(url, res => console.log('🌐 Pinged testdb to keep MySQL awake'))
     .on('error', err => console.error('Ping error:', err.message));
 }, 5 * 60 * 1000); // every 5 minutes

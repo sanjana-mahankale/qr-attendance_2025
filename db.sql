@@ -1,58 +1,64 @@
--- QR Attendance (Enhanced)
-CREATE DATABASE IF NOT EXISTS qr_attendance;
-USE qr_attendance;
-
-CREATE TABLE IF NOT EXISTS students (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  roll VARCHAR(50) NOT NULL UNIQUE,
-  full_name VARCHAR(200) NOT NULL,
-  email VARCHAR(200) DEFAULT NULL
-);
-
 CREATE TABLE IF NOT EXISTS subjects (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  code VARCHAR(50) NOT NULL,
-  name VARCHAR(200) NOT NULL
+  subject_name VARCHAR(100) NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS classes (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL -- e.g. "SE-A", "TE-CSE"
+  class_name VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS teachers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  full_name VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS students (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  roll VARCHAR(50) NOT NULL,
+  prn VARCHAR(50) NOT NULL,
+  full_name VARCHAR(100) NOT NULL,
+  contact VARCHAR(20),
+  email VARCHAR(100),
+  class_id INT,
+  UNIQUE KEY (roll, class_id),
+  FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  subject_id INT NOT NULL,
-  class_id INT NOT NULL,
-  session_code VARCHAR(120) NOT NULL UNIQUE,
-  start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  end_time DATETIME DEFAULT NULL,
-  created_by VARCHAR(100) DEFAULT NULL,
-  title VARCHAR(200) DEFAULT NULL,
-  FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
-  FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+  subject_id INT,
+  class_id INT,
+  session_code VARCHAR(100) UNIQUE,
+  session_token VARCHAR(100),
+  created_by VARCHAR(100),
+  start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  end_time DATETIME,
+  FOREIGN KEY (subject_id) REFERENCES subjects(id),
+  FOREIGN KEY (class_id) REFERENCES classes(id)
 );
+
 
 CREATE TABLE IF NOT EXISTS attendance (
-  id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  session_id INT NOT NULL,
-  student_id INT NULL,
-  roll VARCHAR(50) NOT NULL,
-  full_name VARCHAR(200) NOT NULL,
-  email VARCHAR(200) DEFAULT NULL,
-  status ENUM('present','absent') NOT NULL DEFAULT 'present',
-  timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY unique_session_roll (session_id, roll),
-  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
-  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE SET NULL
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  session_id INT,
+  student_id INT,
+  roll VARCHAR(50),
+  full_name VARCHAR(100),
+  email VARCHAR(100),
+  status VARCHAR(20),
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (session_id, student_id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id),
+  FOREIGN KEY (student_id) REFERENCES students(id)
 );
 
--- sample data
-INSERT INTO subjects (code, name) VALUES ('CS101','Data Structures'), ('CS102','Operating Systems') ON DUPLICATE KEY UPDATE name=VALUES(name);
-INSERT INTO classes (name) VALUES ('SE-A'),('TE-CSE') ON DUPLICATE KEY UPDATE name=VALUES(name);
-
-INSERT INTO students (roll, full_name, email) VALUES
-('R001','Aman Sharma','aman@example.com'),
-('R002','Priya Verma','priya@example.com'),
-('R003','Rahul Singh','rahul@example.com')
-ON DUPLICATE KEY UPDATE full_name=VALUES(full_name), email=VALUES(email);
+CREATE TABLE IF NOT EXISTS class_students (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  class_id INT,
+  student_id INT,
+  created_by VARCHAR(100),
+  UNIQUE KEY (class_id, student_id),
+  FOREIGN KEY (class_id) REFERENCES classes(id),
+  FOREIGN KEY (student_id) REFERENCES students(id)
+);
