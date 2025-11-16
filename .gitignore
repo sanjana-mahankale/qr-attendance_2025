@@ -1,15 +1,8 @@
-".env" 
-<<<<<<< HEAD
-".env" 
-=======
->>>>>>> 8a166dcc0be9d696719afca4d2f0742e1385c997
-".env" 
-".env" 
-node_modules/ 
-.env 
-node_modules/ 
-uploads/ 
-".env" 
-".env" 
-".env" 
-".env" 
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+
+# Uploaded files
+uploads/
