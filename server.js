@@ -28,31 +28,28 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(fileUpload({ limits: { fileSize: 25 * 1024 * 1024 }, abortOnLimit: true }));
-
-// ✅ Serve static files
 app.use(express.static(PUBLIC_DIR));
 
 // === Database config ===
 const DB = {
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'defaultdb'
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME
 };
 
 // === Load Aiven SSL certificate ===
-// Path to CA certificate
 const caCertPath = path.join(__dirname, 'ca.pem');
-
 let caCert = null;
 if (fs.existsSync(caCertPath)) {
   caCert = fs.readFileSync(caCertPath);
   console.log('✅ CA certificate loaded successfully');
 } else {
-  console.warn('⚠️ CA certificate not found, SSL connection may fail.');
+  console.warn('⚠️ CA certificate not found. SSL connection may fail.');
 }
-// === Create MySQL pool with SSL ===
+
+// === MySQL Pool with SSL ===
 async function getPool() {
   if (!global.pool) {
     global.pool = mysql.createPool({
@@ -69,7 +66,9 @@ async function getPool() {
 
     global.pool.on('error', (err) => {
       console.error('⚠️ MySQL Pool Error:', err);
-      if (err.code === 'PROTOCOL_CONNECTION_LOST') global.pool = null;
+      if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ETIMEDOUT') {
+        global.pool = null; // recreate pool on next request
+      }
     });
   }
   return global.pool;
@@ -113,10 +112,6 @@ app.get('/testdb', async (req, res) => {
 });
 
 // === API Routes ===
-// (Keep all your existing routes as in your original code)
-
-
-// === API Routes ===
 
 // Metadata
 app.get('/api/meta', async (req, res) => {
@@ -130,7 +125,6 @@ app.get('/api/meta', async (req, res) => {
     res.json({ ok: false, error: err.message });
   }
 });
-
 
 // Teachers endpoints
 app.get('/api/teachers', async (req, res) => {
