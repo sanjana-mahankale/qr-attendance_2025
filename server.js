@@ -31,11 +31,15 @@ app.use(fileUpload({ limits: { fileSize: 25 * 1024 * 1024 }, abortOnLimit: true 
 app.use(express.static(PUBLIC_DIR));
 
 // === DATABASE POOL USING RAILWAY PUBLIC URL ===
+// === DATABASE POOL USING RAILWAY PUBLIC URL ===
 let pool;
 async function getPool() {
   if (!pool) {
     if (!process.env.MYSQL_PUBLIC_URL) throw new Error("MYSQL_PUBLIC_URL not set in .env");
+    
+    // Add multipleStatements=true if you plan to run multiple queries at once
     pool = mysql.createPool(process.env.MYSQL_PUBLIC_URL + "?multipleStatements=true");
+    
     pool.on('error', (err) => {
       console.error("MySQL Pool Error:", err);
       pool = null;
@@ -43,6 +47,9 @@ async function getPool() {
   }
   return pool;
 }
+
+
+
 
 // === HELPERS ===
 function genToken(len = 48) {
@@ -116,20 +123,35 @@ app.post('/api/add-teacher', async (req, res) => {
 });
 
 // -------- SUBJECT --------
+// -------- SUBJECT --------
 app.post('/api/add-subject', async (req, res) => {
   try {
     const { subject_name } = req.body;
-    if (!subject_name || subject_name.trim() === "") return res.json({ ok: false, error: "Subject name required" });
+
+    // ✅ Validate input
+    if (!subject_name || subject_name.trim() === "") {
+      return res.json({ ok: false, error: "Subject name required" });
+    }
 
     const pool = await getPool();
+    console.log("Adding subject:", subject_name.trim());
+
     const [result] = await pool.query(
-      `INSERT INTO subjects (subject_name) 
-       VALUES (?) 
-       ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)`,
+      `INSERT INTO subjects (subject_name)
+       VALUES (?)
+       ON DUPLICATE KEY UPDATE subject_name = VALUES(subject_name)`,
       [subject_name.trim()]
     );
-    res.json({ ok: true, subject_id: result.insertId, message: "Subject saved successfully" });
+
+    console.log("DB result:", result);
+
+    // Use insertId if available, otherwise fallback
+    const subject_id = result.insertId || null;
+
+    res.json({ ok: true, subject_id, message: "Subject saved successfully" });
+
   } catch (e) {
+    console.error("Error adding subject:", e);
     res.json({ ok: false, error: e.message });
   }
 });
@@ -138,10 +160,29 @@ app.post('/api/add-subject', async (req, res) => {
 app.post('/api/add-class', async (req, res) => {
   try {
     const { class_name } = req.body;
+
+    if (!class_name || class_name.trim() === "") {
+      return res.json({ ok: false, error: "Class name required" });
+    }
+
     const pool = await getPool();
-    await pool.query("INSERT IGNORE INTO classes (class_name) VALUES (?)", [class_name]);
-    res.json({ ok: true });
+    console.log("Adding class:", class_name.trim());
+
+    const [result] = await pool.query(
+      `INSERT INTO classes (class_name)
+       VALUES (?)
+       ON DUPLICATE KEY UPDATE class_name = VALUES(class_name)`,
+      [class_name.trim()]
+    );
+
+    console.log("DB result:", result);
+
+    const class_id = result.insertId || null;
+
+    res.json({ ok: true, class_id, message: "Class saved successfully" });
+
   } catch (e) {
+    console.error("Error adding class:", e);
     res.json({ ok: false, error: e.message });
   }
 });
