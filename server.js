@@ -30,35 +30,18 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(fileUpload({ limits: { fileSize: 25 * 1024 * 1024 }, abortOnLimit: true }));
 app.use(express.static(PUBLIC_DIR));
 
-// === DATABASE CONFIG (Railway) ===
-const DB = {
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
-};
-
-// === MySQL Pool (NO SSL REQUIRED FOR RAILWAY) ===
+// === DATABASE POOL USING RAILWAY PUBLIC URL ===
+let pool;
 async function getPool() {
-  if (!global.pool) {
-    global.pool = mysql.createPool({
-      host: DB.host,
-      port: DB.port,
-      user: DB.user,
-      password: DB.password,
-      database: DB.database,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
-    });
-
-    global.pool.on('error', (err) => {
+  if (!pool) {
+    if (!process.env.MYSQL_PUBLIC_URL) throw new Error("MYSQL_PUBLIC_URL not set in .env");
+    pool = mysql.createPool(process.env.MYSQL_PUBLIC_URL + "?multipleStatements=true");
+    pool.on('error', (err) => {
       console.error("MySQL Pool Error:", err);
-      global.pool = null;
+      pool = null;
     });
   }
-  return global.pool;
+  return pool;
 }
 
 // === HELPERS ===
@@ -136,9 +119,16 @@ app.post('/api/add-teacher', async (req, res) => {
 app.post('/api/add-subject', async (req, res) => {
   try {
     const { subject_name } = req.body;
+    if (!subject_name || subject_name.trim() === "") return res.json({ ok: false, error: "Subject name required" });
+
     const pool = await getPool();
-    await pool.query("INSERT IGNORE INTO subjects (subject_name) VALUES (?)", [subject_name]);
-    res.json({ ok: true });
+    const [result] = await pool.query(
+      `INSERT INTO subjects (subject_name) 
+       VALUES (?) 
+       ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)`,
+      [subject_name.trim()]
+    );
+    res.json({ ok: true, subject_id: result.insertId, message: "Subject saved successfully" });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -160,7 +150,6 @@ app.post('/api/add-class', async (req, res) => {
 app.post('/api/create-session', async (req, res) => {
   try {
     const { subject_id, class_id, created_by } = req.body;
-
     const pool = await getPool();
     const session_code = Math.random().toString(36).substr(2, 6).toUpperCase();
     const session_token = genToken(16);
@@ -173,16 +162,11 @@ app.post('/api/create-session', async (req, res) => {
       [subject_id, class_id, created_by, session_code, session_token, start, end]
     );
 
-    const session_id = result.insertId;
-
-    const baseUrl =
-      process.env.BASE_URL?.replace(/\/$/, "") ||
-      "https://qr-attendance-2025.onrender.com";
-
+    const baseUrl = (process.env.BASE_URL || "http://localhost:3000").replace(/\/$/, "");
     const qrLink = `${baseUrl}/student?session_code=${session_code}&token=${session_token}`;
     const qrDataUrl = await QRCode.toDataURL(qrLink);
 
-    res.json({ ok: true, session_code, session_id, qrLink, qrDataUrl });
+    res.json({ ok: true, session_code, session_id: result.insertId, qrLink, qrDataUrl });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -191,35 +175,19 @@ app.post('/api/create-session', async (req, res) => {
 // -------- RECORD ATTENDANCE --------
 app.post('/api/record-attendance', async (req, res) => {
   const { session_code, token, roll, full_name, email } = req.body;
-
   try {
     const pool = await getPool();
-
-    const [sessions] = await pool.query(
-      "SELECT * FROM sessions WHERE session_code=? AND session_token=?",
-      [session_code, token]
-    );
-
+    const [sessions] = await pool.query("SELECT * FROM sessions WHERE session_code=? AND session_token=?", [session_code, token]);
     if (!sessions.length) return res.json({ ok: false, error: "Invalid session" });
 
     const session = sessions[0];
-
-    let [students] = await pool.query(
-      "SELECT * FROM students WHERE email=?",
-      [email]
-    );
-
+    let [students] = await pool.query("SELECT * FROM students WHERE email=?", [email]);
     let student_id;
 
     if (!students.length) {
-      const [ins] = await pool.query(
-        "INSERT INTO students (roll, full_name, email) VALUES (?, ?, ?)",
-        [roll, full_name, email]
-      );
+      const [ins] = await pool.query("INSERT INTO students (roll, full_name, email) VALUES (?, ?, ?)", [roll, full_name, email]);
       student_id = ins.insertId;
-    } else {
-      student_id = students[0].id;
-    }
+    } else student_id = students[0].id;
 
     await pool.query(
       "INSERT INTO attendance (session_id, student_id, roll, full_name, email, status) VALUES (?, ?, ?, ?, ?, 'Present')",
@@ -237,18 +205,13 @@ app.post("/api/upload-students", async (req, res) => {
   try {
     const file = req.files?.file;
     const class_id = req.body.class_id;
-
     const rows = parseUploadedFileSync(file.data, file.name);
     const pool = await getPool();
-
     let imported = 0;
 
     for (const row of rows) {
-      await pool.query(
-        `INSERT IGNORE INTO students (roll, full_name, email, class_id)
-         VALUES (?, ?, ?, ?)`,
-        [row.roll, row.full_name, row.email, class_id]
-      );
+      await pool.query("INSERT IGNORE INTO students (roll, full_name, email, class_id) VALUES (?, ?, ?, ?)",
+        [row.roll, row.full_name, row.email, class_id]);
       imported++;
     }
 
@@ -274,9 +237,9 @@ app.get("/api/students", async (req, res) => {
   }
 });
 
-// Keep-alive
+// Keep-alive to prevent Render sleeping
 setInterval(() => {
-  const url = (process.env.BASE_URL || "https://qr-attendance-2025.onrender.com") + "/testdb";
+  const url = (process.env.BASE_URL || "http://localhost:3000") + "/testdb";
   https.get(url);
 }, 5 * 60 * 1000);
 
