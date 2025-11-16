@@ -15,21 +15,7 @@ const https = require('https');
 
 const app = express();
 
-// === Middlewares ===
-// Middlewares
-app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(fileUpload({
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
-  abortOnLimit: true,
-}));
-app.use('/', express.static(path.join(__dirname, 'public')));
-
-
-
-// === Upload directories ===
-
+// === Directories ===
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const STUDENTS_UPLOAD_DIR = path.join(UPLOAD_DIR, 'students');
@@ -37,8 +23,16 @@ const STUDENTS_UPLOAD_DIR = path.join(UPLOAD_DIR, 'students');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(STUDENTS_UPLOAD_DIR)) fs.mkdirSync(STUDENTS_UPLOAD_DIR, { recursive: true });
 
+// === Middlewares ===
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(fileUpload({ limits: { fileSize: 25 * 1024 * 1024 }, abortOnLimit: true }));
 
-// ✅ Database config (from .env)
+// ✅ Serve static files
+app.use(express.static(PUBLIC_DIR));
+
+// === Database config ===
 const DB = {
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
@@ -47,7 +41,7 @@ const DB = {
   database: process.env.DB_NAME || 'qr_attendance'
 };
 
-// ✅ Create MySQL connection pool
+// Create MySQL pool
 async function getPool() {
   if (!global.pool) {
     global.pool = mysql.createPool({
@@ -60,19 +54,15 @@ async function getPool() {
       connectionLimit: 10,
       queueLimit: 0
     });
-
     global.pool.on('error', (err) => {
       console.error('⚠️ MySQL Pool Error:', err);
-      if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-        console.log('🔁 Reconnecting to MySQL...');
-        global.pool = null;
-      }
+      if (err.code === 'PROTOCOL_CONNECTION_LOST') global.pool = null;
     });
   }
   return global.pool;
 }
 
-// ✅ Test DB route
+// Test DB
 app.get('/testdb', async (req, res) => {
   try {
     const pool = await getPool();
@@ -84,7 +74,7 @@ app.get('/testdb', async (req, res) => {
   }
 });
 
-// === Helpers ===
+// Helpers
 function genToken(len = 48) {
   return crypto.randomBytes(Math.ceil(len / 2)).toString('hex').slice(0, len);
 }
@@ -103,18 +93,15 @@ function parseUploadedFileSync(buffer, filename) {
   }
 }
 
-// === Routes ===
-
-// Serve pages
-
-
+// === HTML Routes ===
 app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'teacher.html')));
 app.get('/teacher', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'teacher.html')));
 app.get('/student', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'student_scan.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'admin.html')));
 
+// === API Routes ===
 
-// Get metadata
+// Metadata
 app.get('/api/meta', async (req, res) => {
   try {
     const pool = await getPool();
@@ -126,6 +113,7 @@ app.get('/api/meta', async (req, res) => {
     res.json({ ok: false, error: err.message });
   }
 });
+
 
 // Teachers endpoints
 app.get('/api/teachers', async (req, res) => {
