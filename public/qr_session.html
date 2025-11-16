@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Session QR & Live Attendance</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #eef5ff, #ffffff);
+      padding: 20px;
+      max-width: 1200px;
+      margin: auto;
+      color: #222;
+    }
+
+    h2 {
+      text-align: center;
+      color: #004aad;
+      margin-bottom: 25px;
+      font-size: 26px;
+      letter-spacing: 0.5px;
+    }
+
+    #wrap {
+      display: flex;
+      gap: 25px;
+      flex-wrap: wrap;
+      align-items: stretch;
+      justify-content: space-between;
+      background: #fff;
+      border-radius: 16px;
+      padding: 25px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    #left, #right {
+      flex: 1 1 45%;
+      background: #f9fbff;
+      border: 1px solid #e4ebf7;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: inset 0 0 8px rgba(0,0,0,0.03);
+    }
+
+    #left h3, #right h3 {
+      font-size: 18px;
+      margin-top: 0;
+      color: #0b3d91;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 2px solid #004aad;
+      padding-bottom: 5px;
+    }
+
+    #qrImg {
+      width: 280px;
+      height: 280px;
+      border: 2px dashed #a4c8ff;
+      background: #ffffff;
+      border-radius: 10px;
+      display: block;
+      margin: 15px auto;
+      object-fit: contain;
+      padding: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .small {
+      font-size: 14px;
+      color: #555;
+      text-align: center;
+    }
+
+    #right {
+      background: #fdfefe;
+    }
+
+    .count {
+      font-weight: 600;
+      color: #004aad;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 15px;
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+    th {
+      background: #004aad;
+      color: #fff;
+      text-align: left;
+      padding: 10px;
+    }
+
+    td {
+      border-bottom: 1px solid #eee;
+      padding: 8px 10px;
+    }
+
+    tr:hover td {
+      background: #f5f9ff;
+    }
+
+    em {
+      color: #777;
+      font-style: italic;
+    }
+
+    @media(max-width: 800px) {
+      #wrap {
+        flex-direction: column;
+      }
+      #left, #right {
+        width: 100%;
+      }
+      #qrImg {
+        width: 240px;
+        height: 240px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Session — QR & Live Attendance</h2>
+  <div id="wrap">
+    <div id="left">
+      <h3>📷 Scan this QR</h3>
+      <img id="qrImg" src="" alt="QR" />
+      <p class="small">Session code: <span id="scode"></span></p>
+      <p class="small">Expires in: <span id="countdown"></span></p>
+    </div>
+
+    <div id="right">
+      <h3>Live Submissions</h3>
+      <div class="count">Present count: <span id="presentCount">0</span></div>
+      <div id="liveList"><em>No submissions yet</em></div>
+      <p class="small">⏱ The live list refreshes automatically.</p>
+    </div>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const session_code = urlParams.get('session_code') || sessionStorage.getItem('latest_session_code');
+    const session_id = urlParams.get('session_id') || sessionStorage.getItem('latest_session_id');
+    const qrData = sessionStorage.getItem('latest_qr');
+    const expiresAtStr = sessionStorage.getItem('latest_expires_at');
+
+    if (!session_code) {
+      document.body.innerHTML = '<h3 style="color:red">Session not found. Start a session from the teacher page.</h3>';
+      throw new Error('session_code missing');
+    }
+
+    document.getElementById('scode').innerText = session_code;
+    (async function loadQR() {
+      const qrFromSession = sessionStorage.getItem('latest_qr');
+      if (qrFromSession) {
+        document.getElementById('qrImg').src = qrFromSession;
+        return;
+      }
+
+      if (session_code) {
+        const staticUrl = `/qr/${session_code}.png`;
+        try {
+          const head = await fetch(staticUrl, { method: 'HEAD' });
+          if (head.ok) {
+            document.getElementById('qrImg').src = staticUrl;
+            return;
+          }
+        } catch (e) {
+          console.warn('Static QR fetch failed', e);
+        }
+      }
+
+      document.getElementById('qrImg').alt = '❌ QR not found. Go back to teacher page and restart session.';
+    })();
+
+    let expiresAt = expiresAtStr ? new Date(expiresAtStr) : null;
+    function updateCountdown(){
+      if (!expiresAt) { document.getElementById('countdown').innerText = 'Unknown'; return; }
+      const now = new Date();
+      const diff = expiresAt - now;
+      if (diff <= 0) {
+        document.getElementById('countdown').innerText = 'Expired';
+        return;
+      }
+      const mm = Math.floor(diff/60000); const ss = Math.floor((diff%60000)/1000);
+      document.getElementById('countdown').innerText = `${mm}m ${ss}s`;
+    }
+    setInterval(updateCountdown, 500);
+    updateCountdown();
+
+    let pollTimer = null;
+    async function refreshList(){
+  try {
+    const r = await fetch('/api/session/'+encodeURIComponent(session_code)+'/attendance');
+    const j = await r.json();
+    if (!j.ok) { 
+      console.warn('session attendance fetch failed', j); 
+      return; 
+    }
+
+    const area = document.getElementById('liveList');
+    const rows = j.attendance || [];
+
+    if (rows.length === 0) {
+      area.innerHTML = '<em>No submissions yet</em>';
+      document.getElementById('presentCount').innerText = '0';
+      return;
+    }
+
+    let html = '<table><tr><th>#</th><th>Roll</th><th>Name</th><th>Time</th></tr>';
+    rows.forEach((a, idx) => {
+      const istDateTime = new Date(a.timestamp).toLocaleString('en-IN', { 
+        timeZone: 'Asia/Kolkata', 
+        hour12: false 
+      });
+      html += `<tr><td>${idx+1}</td><td>${a.roll}</td><td>${a.full_name}</td><td>${istDateTime}</td></tr>`;
+    });
+    html += '</table>';
+
+    area.innerHTML = html;
+    document.getElementById('presentCount').innerText = rows.length;
+
+  } catch(e) {
+    console.error('refreshList error', e);
+  }
+}
+
+
+    refreshList();
+    pollTimer = setInterval(refreshList, 3500);
+
+    setInterval(()=>{
+      if (!expiresAt) return;
+      if (new Date() > expiresAt) {
+        document.getElementById('countdown').innerText = 'Expired';
+        clearInterval(pollTimer);
+      }
+    }, 2000);
+  </script>
+</body>
+</html>
+

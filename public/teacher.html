@@ -1,0 +1,381 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Teacher - Create Session</title>
+  <style>
+    /* 🌈 Glassmorphism + Gradient Theme */
+    body {
+      font-family: "Poppins", Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #f1f1f1;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 850px;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 35px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(12px);
+      animation: fadeIn 0.8s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h2 {
+      text-align: center;
+      color: #f2f0f0;
+      font-size: 30px;
+      margin-bottom: 25px;
+      letter-spacing: 1px;
+    }
+
+    h3 {
+      color: #dcdcdc;
+      margin-top: 25px;
+      font-size: 18px;
+      border-left: 4px solid #00c3ff;
+      padding-left: 8px;
+    }
+
+    label {
+      display: block;
+      margin-top: 16px;
+      font-weight: 600;
+      color: #e8e8e8;
+    }
+
+    input, select, button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      margin-top: 8px;
+      box-sizing: border-box;
+      transition: 0.3s ease;
+    }
+
+    input, select {
+      background-color: rgba(255, 255, 255, 0.15);
+      color: #090909;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #00c3ff;
+      box-shadow: 0 0 8px #00c3ff;
+    }
+
+    input::placeholder {
+      color: #bbb;
+    }
+
+    button {
+      background: linear-gradient(135deg, #00c3ff, #7b2ff7);
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      box-shadow: 0 4px 15px rgba(0, 195, 255, 0.4);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 195, 255, 0.6);
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .row input, .row select {
+      flex: 1;
+    }
+
+    #qrImg {
+      width: 260px;
+      height: 260px;
+      display: block;
+      margin: 20px auto;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    }
+
+    .small {
+      color: #ccc;
+      font-size: 14px;
+      margin-top: 6px;
+      text-align: center;
+    }
+
+    .dashboard-btn {
+      background: linear-gradient(135deg, #ff8a00, #e52e71);
+      color: white;
+      border-radius: 8px;
+      padding: 10px 16px;
+      text-decoration: none;
+      float: right;
+      font-size: 15px;
+      font-weight: 600;
+      box-shadow: 0 4px 15px rgba(229, 46, 113, 0.4);
+      transition: 0.3s ease;
+    }
+
+    .dashboard-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(229, 46, 113, 0.6);
+    }
+
+    #sessionArea {
+      margin-top: 30px;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      animation: fadeIn 0.8s ease-in;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 0;
+      margin: 10px 0;
+    }
+
+    ul li {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="admin_panel.html" class="dashboard-btn">🏠 Go to Dashboard</a>
+    <h2>Teacher – Create Session</h2>
+
+    <h3>Upload student database (CSV or Excel — optional one-time)</h3>
+    <input type="file" id="studentsFile" accept=".csv, .xlsx" />
+    <button id="uploadStudentsBtn">Upload File</button>
+    <div id="uploadRes" class="small"></div>
+
+    <label>Created By (Teacher Name)</label>
+    <input list="teacherList" id="created_by" placeholder="Type or select teacher name">
+    <datalist id="teacherList"></datalist>
+
+    <label>Subject</label>
+    <div class="row">
+      <select id="subjectSelect"></select>
+      <input id="subjectInput" placeholder="Type new subject and click Add" />
+      <button id="addSubjectBtn" style="width:140px;">Add</button>
+    </div>
+
+    <label>Class</label>
+    <div class="row">
+      <select id="classSelect"></select>
+      <input id="classInput" placeholder="Type new class and click Add (e.g. CSE-A)" />
+      <button id="addClassBtn" style="width:140px;">Add</button>
+    </div>
+
+    <label>Duration (minutes, optional — ignored because sessions fixed to 10 minutes)</label>
+    <input id="duration" placeholder="e.g. 20 (not required)" />
+
+    <button id="createSessionBtn">Generate QR & Start Session</button>
+
+    <div id="sessionArea" style="display:none;">
+      <h3>Session Started</h3>
+      <img id="qrImg" src="" alt="QR will appear here" />
+      <p>Session Code: <strong id="scode"></strong></p>
+      <p class="small" id="expiresAt"></p>
+
+      <button id="exportSessionBtn">Download Session CSV</button>
+
+      <h4 style="margin-top:20px;">Live Submissions</h4>
+      <div id="liveList"><em>No submissions yet</em></div>
+      <button id="refreshBtn">Refresh Now</button>
+    </div>
+  </div>
+
+  <!-- your full JavaScript code remains unchanged below -->
+  <script>
+ // 🔹 Load teachers into dropdown
+async function loadTeachers() {
+  const res = await fetch('/api/teachers');
+  const data = await res.json();
+  if (data.ok && data.teachers) {
+    const datalist = document.getElementById('teacherList');
+    datalist.innerHTML = '';
+    data.teachers.forEach(t => {
+      const option = document.createElement('option');
+      option.value = t.full_name;
+      datalist.appendChild(option);
+    });
+  }
+}
+
+// 🔹 Save new teacher name if not exists
+async function ensureTeacherSaved(name) {
+  if (!name) return;
+  await fetch('/api/add-teacher', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ full_name: name })
+  });
+  await loadTeachers();
+}
+
+// Load meta data for subjects/classes
+async function loadMeta() {
+  try {
+    const r = await fetch('/api/meta');
+    const j = await r.json();
+    if (j.ok) {
+      const subjectSelect = document.getElementById('subjectSelect');
+      const classSelect = document.getElementById('classSelect');
+      subjectSelect.innerHTML = '<option value="">-- select subject --</option>';
+      classSelect.innerHTML = '<option value="">-- select class --</option>';
+      j.subjects.forEach(s => subjectSelect.appendChild(new Option(s.subject_name, s.id)));
+      j.classes.forEach(c => classSelect.appendChild(new Option(c.class_name, c.id)));
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Failed to load meta: ' + e.message);
+  }
+}
+
+// 🔹 Page load
+loadTeachers();
+loadMeta();
+
+// Add Subject
+document.getElementById('addSubjectBtn').addEventListener('click', async () => {
+  const val = document.getElementById('subjectInput').value.trim();
+  if (!val) return alert('Enter subject name');
+  const r = await fetch('/api/add-subject', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subject_name: val })
+  });
+  const j = await r.json();
+  if (j.ok) {
+    alert('Subject saved');
+    document.getElementById('subjectInput').value = '';
+    await loadMeta();
+    setTimeout(() => {
+      Array.from(document.getElementById('subjectSelect').options)
+        .forEach(o => { if (o.text === j.subject.subject_name) o.selected = true; });
+    }, 200);
+  } else alert('Error saving subject');
+});
+
+// Add Class
+document.getElementById('addClassBtn').addEventListener('click', async () => {
+  const val = document.getElementById('classInput').value.trim();
+  if (!val) return alert('Enter class name');
+  const r = await fetch('/api/add-class', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ class_name: val })
+  });
+  const j = await r.json();
+  if (j.ok) {
+    alert('Class saved');
+    document.getElementById('classInput').value = '';
+    await loadMeta();
+    setTimeout(() => {
+      Array.from(document.getElementById('classSelect').options)
+        .forEach(o => { if (o.text === j.class.class_name) o.selected = true; });
+    }, 200);
+  } else alert('Error saving class');
+});
+
+// Upload Students CSV/Excel
+document.getElementById('uploadStudentsBtn').addEventListener('click', async () => {
+  const file = document.getElementById('studentsFile').files[0];
+  const classId = document.getElementById('classSelect').value;
+  const createdBy = document.getElementById('created_by').value.trim();
+
+  if (!file) return alert('⚠️ Please select a file first');
+  if (!classId) return alert('⚠️ Please select a class');
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("class_id", classId);
+  formData.append("created_by", createdBy);
+  formData.append("mode", "merge");
+
+  const uploadRes = document.getElementById('uploadRes');
+  uploadRes.innerText = '📤 Uploading... please wait';
+
+  try {
+    const res = await fetch('/api/upload-students', { method: 'POST', body: formData });
+    const j = await res.json();
+    if (j.ok) {
+      uploadRes.innerText = `✅ Successfully imported ${j.imported} students (${j.skipped || 0} skipped).`;
+    } else {
+      uploadRes.innerText = '❌ Upload failed: ' + (j.error || 'unknown');
+    }
+  } catch (e) {
+    console.error('Upload error:', e);
+    uploadRes.innerText = '❌ Upload error: ' + e.message;
+  }
+});
+
+// ✅ Create QR Session (10 min expiry)
+document.getElementById('createSessionBtn').addEventListener('click', async () => {
+  const subject_id = document.getElementById('subjectSelect').value;
+  const class_id = document.getElementById('classSelect').value;
+  const created_by = document.getElementById('created_by').value.trim();
+
+  if (!subject_id || !class_id) return alert('⚠️ Please select subject and class');
+  await ensureTeacherSaved(created_by);
+
+  try {
+    const resp = await fetch('/api/create-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject_id, class_id, created_by })
+    });
+
+    const data = await resp.json();
+    console.log("Session Response:", data);
+
+    if (data.ok) {
+      const qrUrl = data.qrImageUrl || data.qrDataUrl || '';
+
+      // 🕒 Set expiry to 10 minutes from now
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      sessionStorage.setItem('latest_expires_at', new Date(expiresAt).toISOString());
+
+      // Store QR + session info
+      sessionStorage.setItem('latest_qr', qrUrl);
+      sessionStorage.setItem('latest_session_code', data.session_code);
+      sessionStorage.setItem('latest_session_id', data.session_id);
+
+      // Redirect to QR page
+      window.location.href = `qr_session.html?session_code=${encodeURIComponent(data.session_code)}&session_id=${encodeURIComponent(data.session_id)}`;
+    } else {
+      alert('❌ Failed to create session: ' + (data.error || 'unknown'));
+    }
+  } catch (e) {
+    console.error('Session create error:', e);
+    alert('❌ Network error: ' + e.message);
+  }
+});
+</script>
+</body>
+</html> 

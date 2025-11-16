@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Student Attendance Form</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 16px;
+      max-width: 500px;
+      margin: auto;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .info {
+      margin-top: 20px;
+      font-weight: bold;
+      text-align: center;
+    }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h2>Student Attendance Form</h2>
+  
+  <div id="formArea">
+    <label>Full Name</label>
+    <input id="fullName" placeholder="e.g. Riya Sharma" />
+
+    <label>Roll Number</label>
+    <input id="rollNo" placeholder="e.g. 21CS001" />
+
+    <label>Email (College Email)</label>
+    <input id="email" placeholder="e.g. student@college.edu" />
+
+    <button id="submitBtn">Submit Attendance</button>
+  </div>
+
+  <div id="result" class="info"></div>
+
+  <script>
+    // ✅ Extract QR parameters
+    const params = new URLSearchParams(window.location.search);
+    const session_code = params.get('session_code');
+    const token = params.get('token');
+
+    // ✅ Validate QR data
+    if (!session_code || !token) {
+      document.body.innerHTML = "<h2 style='color:red;text-align:center;'>Invalid QR code!</h2>";
+      throw new Error('Invalid QR code');
+    }
+
+    document.getElementById('submitBtn').onclick = async () => {
+      const fullName = document.getElementById('fullName').value.trim();
+      const rollNo = document.getElementById('rollNo').value.trim();
+      const email = document.getElementById('email').value.trim();
+
+      if (!fullName || !rollNo || !email) {
+        document.getElementById('result').innerHTML = '<span class="error">Missing fields</span>';
+        return;
+      }
+
+      document.getElementById('result').innerHTML = '⏳ Submitting...';
+
+      try {
+        const baseUrl = window.location.origin; // works for localhost & Render
+        const res = await fetch(`${baseUrl}/api/record-attendance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_code: session_code,
+            token: token,
+            roll: rollNo,        // ✅ backend expects "roll", not "roll_no"
+            full_name: fullName,
+            email: email
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.ok) {
+          document.getElementById('result').innerHTML =
+            '<span class="success">✅ Attendance marked successfully!</span>';
+          document.getElementById('submitBtn').disabled = true;
+        } else {
+          document.getElementById('result').innerHTML =
+            '<span class="error">' + (data.error || 'Failed to mark attendance') + '</span>';
+        }
+      } catch (err) {
+        console.error(err);
+        document.getElementById('result').innerHTML =
+          '<span class="error">Network error — please try again.</span>';
+      }
+    };
+  </script>
+</body>
+</html>
