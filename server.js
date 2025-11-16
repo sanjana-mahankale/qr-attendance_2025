@@ -38,10 +38,21 @@ const DB = {
   port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'qr_attendance'
+  database: process.env.DB_NAME || 'defaultdb'
 };
 
-// Create MySQL pool
+// === Load Aiven SSL certificate ===
+// Path to CA certificate
+const caCertPath = path.join(__dirname, 'ca.pem');
+
+let caCert = null;
+if (fs.existsSync(caCertPath)) {
+  caCert = fs.readFileSync(caCertPath);
+  console.log('✅ CA certificate loaded successfully');
+} else {
+  console.warn('⚠️ CA certificate not found, SSL connection may fail.');
+}
+// === Create MySQL pool with SSL ===
 async function getPool() {
   if (!global.pool) {
     global.pool = mysql.createPool({
@@ -52,8 +63,10 @@ async function getPool() {
       database: DB.database,
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0
+      queueLimit: 0,
+      ssl: caCert ? { ca: caCert } : undefined
     });
+
     global.pool.on('error', (err) => {
       console.error('⚠️ MySQL Pool Error:', err);
       if (err.code === 'PROTOCOL_CONNECTION_LOST') global.pool = null;
@@ -62,19 +75,7 @@ async function getPool() {
   return global.pool;
 }
 
-// Test DB
-app.get('/testdb', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const [rows] = await pool.query('SELECT NOW() AS current_time');
-    res.json({ ok: true, time: rows[0].current_time });
-  } catch (err) {
-    console.error('❌ DB Test Error:', err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// Helpers
+// === Helpers ===
 function genToken(len = 48) {
   return crypto.randomBytes(Math.ceil(len / 2)).toString('hex').slice(0, len);
 }
@@ -98,6 +99,22 @@ app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'teacher.html')));
 app.get('/teacher', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'teacher.html')));
 app.get('/student', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'student_scan.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'admin.html')));
+
+// === Test DB Route ===
+app.get('/testdb', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const [rows] = await pool.query('SELECT NOW() AS current_time');
+    res.json({ ok: true, time: rows[0].current_time });
+  } catch (err) {
+    console.error('❌ DB Test Error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// === API Routes ===
+// (Keep all your existing routes as in your original code)
+
 
 // === API Routes ===
 
