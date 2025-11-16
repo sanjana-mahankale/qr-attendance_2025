@@ -16,17 +16,27 @@ const https = require('https');
 const app = express();
 
 // === Middlewares ===
+// Middlewares
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(fileUpload({ limits: { fileSize: 25 * 1024 * 1024 }, abortOnLimit: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(fileUpload({
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+  abortOnLimit: true,
+}));
+app.use('/', express.static(path.join(__dirname, 'public')));
+
+
 
 // === Upload directories ===
+
+const PUBLIC_DIR = path.join(__dirname, 'public');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const STUDENTS_UPLOAD_DIR = path.join(UPLOAD_DIR, 'students');
+
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(STUDENTS_UPLOAD_DIR)) fs.mkdirSync(STUDENTS_UPLOAD_DIR, { recursive: true });
+
 
 // ✅ Database config (from .env)
 const DB = {
@@ -96,10 +106,13 @@ function parseUploadedFileSync(buffer, filename) {
 // === Routes ===
 
 // Serve pages
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'teacher.html')));
-app.get('/teacher', (req, res) => res.sendFile(path.join(__dirname, 'public', 'teacher.html')));
-app.get('/student', (req, res) => res.sendFile(path.join(__dirname, 'public', 'student_scan.html')));
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+
+
+app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'teacher.html')));
+app.get('/teacher', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'teacher.html')));
+app.get('/student', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'student_scan.html')));
+app.get('/admin', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'admin.html')));
+
 
 // Get metadata
 app.get('/api/meta', async (req, res) => {
@@ -189,7 +202,7 @@ app.post('/api/create-session', async (req, res) => {
 
     const session_id = result.insertId;
     const baseUrl = process.env.BASE_URL ? process.env.BASE_URL.replace(/\/$/, '') : 'https://qr-attendance-umrh.onrender.com';
-    const qrLink = `${baseUrl}/student_scan.html?session_code=${session_code}&token=${session_token}`;
+     const qrLink = `${baseUrl}/student?session_code=${session_code}&token=${session_token}`;
     const qrDataUrl = await QRCode.toDataURL(qrLink);
 
     res.json({ ok: true, session_code, session_id, qrDataUrl, qrLink });
