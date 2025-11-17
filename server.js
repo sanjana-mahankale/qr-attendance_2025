@@ -98,192 +98,346 @@ app.get("/api/meta", async (req, res) => {
   }
 });
 
-// -------- TEACHERS --------
+/* Teachers endpoints (for datalist) */
 app.get('/api/teachers', async (req, res) => {
   try {
     const pool = await getPool();
-    const [rows] = await pool.query("SELECT id, full_name FROM teachers ORDER BY full_name");
+    const [rows] = await pool.query('SELECT id, full_name FROM teachers ORDER BY full_name');
     res.json({ ok: true, teachers: rows });
-  } catch (e) {
-    res.json({ ok: false, error: e.message });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ ok:false, error: err.message }); }
 });
-
 app.post('/api/add-teacher', async (req, res) => {
   try {
     const { full_name } = req.body;
-    if (!full_name) return res.json({ ok: false, error: "Name required" });
-
+    if (!full_name) return res.status(400).json({ ok:false, error:'Teacher name required' });
     const pool = await getPool();
-    await pool.query("INSERT IGNORE INTO teachers (full_name) VALUES (?)", [full_name]);
-    res.json({ ok: true });
-  } catch (e) {
-    res.json({ ok: false, error: e.message });
-  }
+    await pool.query('INSERT IGNORE INTO teachers (full_name) VALUES (?)', [full_name.trim()]);
+    res.json({ ok:true });
+  } catch (err) { console.error(err); res.status(500).json({ ok:false, error: err.message }); }
 });
 
-// -------- SUBJECT --------
-// -------- SUBJECT --------
+// ✅ Add Subject
 app.post('/api/add-subject', async (req, res) => {
   try {
     const { subject_name } = req.body;
+    if (!subject_name) return res.json({ ok: false, error: "Missing subject_name" });
 
-    // ✅ Validate input
-    if (!subject_name || subject_name.trim() === "") {
-      return res.json({ ok: false, error: "Subject name required" });
-    }
-
-    const pool = await getPool();
-    console.log("Adding subject:", subject_name.trim());
+    const pool = await getPool(); // ✅ FIXED: get connection pool
 
     const [result] = await pool.query(
-      `INSERT INTO subjects (subject_name)
-       VALUES (?)
-       ON DUPLICATE KEY UPDATE subject_name = VALUES(subject_name)`,
-      [subject_name.trim()]
+      "INSERT IGNORE INTO subjects (subject_name) VALUES (?)",
+      [subject_name]
     );
 
-    console.log("DB result:", result);
+    const [rows] = await pool.query(
+      "SELECT id, subject_name FROM subjects WHERE subject_name = ?",
+      [subject_name]
+    );
 
-    // Use insertId if available, otherwise fallback
-    const subject_id = result.insertId || null;
-
-    res.json({ ok: true, subject_id, message: "Subject saved successfully" });
-
-  } catch (e) {
-    console.error("Error adding subject:", e);
-    res.json({ ok: false, error: e.message });
+    res.json({ ok: true, subject: rows[0] });
+  } catch (err) {
+    console.error("Add subject error:", err);
+    res.json({ ok: false, error: err.message });
   }
 });
 
-// -------- CLASS --------
+// ✅ Add Class
 app.post('/api/add-class', async (req, res) => {
   try {
     const { class_name } = req.body;
+    if (!class_name) return res.json({ ok: false, error: "Missing class_name" });
 
-    if (!class_name || class_name.trim() === "") {
-      return res.json({ ok: false, error: "Class name required" });
-    }
-
-    const pool = await getPool();
-    console.log("Adding class:", class_name.trim());
+    const pool = await getPool(); // ✅ FIXED: get connection pool
 
     const [result] = await pool.query(
-      `INSERT INTO classes (class_name)
-       VALUES (?)
-       ON DUPLICATE KEY UPDATE class_name = VALUES(class_name)`,
-      [class_name.trim()]
+      "INSERT IGNORE INTO classes (class_name) VALUES (?)",
+      [class_name]
     );
 
-    console.log("DB result:", result);
+    const [rows] = await pool.query(
+      "SELECT id, class_name FROM classes WHERE class_name = ?",
+      [class_name]
+    );
 
-    const class_id = result.insertId || null;
-
-    res.json({ ok: true, class_id, message: "Class saved successfully" });
-
-  } catch (e) {
-    console.error("Error adding class:", e);
-    res.json({ ok: false, error: e.message });
+    res.json({ ok: true, class: rows[0] });
+  } catch (err) {
+    console.error("Add class error:", err);
+    res.json({ ok: false, error: err.message });
   }
 });
 
-// -------- CREATE SESSION --------
+
+// === Create session ===
 app.post('/api/create-session', async (req, res) => {
   try {
     const { subject_id, class_id, created_by } = req.body;
+    if (!subject_id || !class_id || !created_by)
+      return res.status(400).json({ ok: false, error: 'Missing required fields' });
+
     const pool = await getPool();
-    const session_code = Math.random().toString(36).substr(2, 6).toUpperCase();
+    const session_code = Math.random().toString(36).substring(2, 8).toUpperCase();
     const session_token = genToken(16);
-    const start = new Date();
-    const end = new Date(start.getTime() + 10 * 60000);
+    const start_time = new Date();
+    const end_time = new Date(start_time.getTime() + 10 * 60000);
 
     const [result] = await pool.query(
       `INSERT INTO sessions (subject_id, class_id, created_by, session_code, session_token, start_time, end_time)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [subject_id, class_id, created_by, session_code, session_token, start, end]
+      [subject_id, class_id, created_by, session_code, session_token, start_time, end_time]
     );
 
-    const baseUrl = (process.env.BASE_URL || "http://localhost:3000").replace(/\/$/, "");
-    const qrLink = `${baseUrl}/student?session_code=${session_code}&token=${session_token}`;
-    const qrDataUrl = await QRCode.toDataURL(qrLink);
+    // After session creation
+const session_id = result.insertId;
 
-    res.json({ ok: true, session_code, session_id: result.insertId, qrLink, qrDataUrl });
-  } catch (e) {
-    res.json({ ok: false, error: e.message });
+// ✅ Define base URL dynamically
+const baseUrl = process.env.BASE_URL 
+  ? process.env.BASE_URL.replace(/\/$/, '') 
+  : 'https://qr-attendance-2025.onrender.com'; // your deployed URL fallback
+
+// ✅ Generate QR link that points to student_scan.html (public folder)
+const qrLink = `${baseUrl}/student_scan.html?session_code=${session_code}&token=${session_token}`;
+
+// ✅ Generate QR as DataURL (you can also save to file if needed)
+const qrDataUrl = await QRCode.toDataURL(qrLink);
+
+
+    res.json({ ok: true, session_code, session_id, qrDataUrl, qrLink });
+  } catch (err) {
+    console.error('QR generation failed:', err);
+    res.json({ ok: false, error: 'QR generation failed' });
   }
 });
 
-// -------- RECORD ATTENDANCE --------
+// === Record attendance ===
 app.post('/api/record-attendance', async (req, res) => {
   const { session_code, token, roll, full_name, email } = req.body;
+  if (!session_code || !token || !roll || !full_name || !email)
+    return res.json({ ok: false, error: 'Missing field' });
+
   try {
     const pool = await getPool();
-    const [sessions] = await pool.query("SELECT * FROM sessions WHERE session_code=? AND session_token=?", [session_code, token]);
-    if (!sessions.length) return res.json({ ok: false, error: "Invalid session" });
 
+    // ✅ Validate session
+    const [sessions] = await pool.query(
+      'SELECT * FROM sessions WHERE session_code = ? AND session_token = ?',
+      [session_code, token]
+    );
+    if (sessions.length === 0) return res.json({ ok: false, error: 'Invalid or expired session' });
     const session = sessions[0];
-    let [students] = await pool.query("SELECT * FROM students WHERE email=?", [email]);
-    let student_id;
 
-    if (!students.length) {
-      const [ins] = await pool.query("INSERT INTO students (roll, full_name, email) VALUES (?, ?, ?)", [roll, full_name, email]);
-      student_id = ins.insertId;
-    } else student_id = students[0].id;
+    // ✅ Get the latest uploaded batch for the student's class
+    const [latestBatch] = await pool.query(
+      'SELECT MAX(imported_at) AS latest_import FROM students WHERE class_id = ?',
+      [session.class_id]
+    );
+    const latest_imported_at = latestBatch[0].latest_import;
 
+    // ✅ Check if scanned email exists in latest batch
+    const [students] = await pool.query(
+      'SELECT * FROM students WHERE email = ? AND imported_at = ?',
+      [email, latest_imported_at]
+    );
+
+    if (students.length === 0) {
+      return res.json({ ok: false, error: 'Email not matched with uploaded file' });
+    }
+
+    const student_id = students[0].id;
+
+    // ✅ Mark attendance
     await pool.query(
-      "INSERT INTO attendance (session_id, student_id, roll, full_name, email, status) VALUES (?, ?, ?, ?, ?, 'Present')",
+      `INSERT INTO attendance (session_id, student_id, roll, full_name, email, status)
+       VALUES (?, ?, ?, ?, ?, 'Present')
+       ON DUPLICATE KEY UPDATE status = 'Present'`,
       [session.id, student_id, roll, full_name, email]
     );
 
-    res.json({ ok: true });
-  } catch (e) {
-    res.json({ ok: false, error: e.message });
+    res.json({ ok: true, message: 'Attendance marked successfully' });
+
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.json({ ok: false, error: 'Already marked attendance' });
+    }
+    console.error('Attendance error:', err);
+    res.json({ ok: false, error: 'Database error' });
   }
 });
 
-// -------- UPLOAD STUDENTS --------
-app.post("/api/upload-students", async (req, res) => {
+
+// === Upload Students ===
+app.post('/api/upload-students', async (req, res) => {
   try {
     const file = req.files?.file;
     const class_id = req.body.class_id;
-    const rows = parseUploadedFileSync(file.data, file.name);
-    const pool = await getPool();
-    let imported = 0;
+    if (!file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
+    if (!class_id) return res.status(400).json({ ok: false, error: 'Missing class_id' });
 
-    for (const row of rows) {
-      await pool.query("INSERT IGNORE INTO students (roll, full_name, email, class_id) VALUES (?, ?, ?, ?)",
-        [row.roll, row.full_name, row.email, class_id]);
+    const records = parseUploadedFileSync(file.data, file.name);
+    const pool = await getPool();
+
+    let imported = 0, skipped = 0;
+    const imported_at = new Date(); // timestamp for this batch
+
+    for (const row of records) {
+      const normalized = {};
+      for (const key in row) normalized[key.trim().toLowerCase()] = row[key];
+
+      const roll = normalized.roll || '';
+      const prn = normalized.prn || '';
+      const full_name = normalized.full_name || '';
+      const contact = normalized.contact || '';
+      const email = normalized.email || '';
+
+      if (!roll || !full_name) {
+        skipped++;
+        continue;
+      }
+
+      await pool.query(
+        `INSERT INTO students (roll, prn, full_name, contact, email, class_id, imported_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           prn = VALUES(prn),
+           full_name = VALUES(full_name),
+           contact = VALUES(contact),
+           email = VALUES(email),
+           class_id = VALUES(class_id),
+           imported_at = VALUES(imported_at)`,
+        [roll, prn, full_name, contact, email, class_id, imported_at]
+      );
       imported++;
     }
 
-    res.json({ ok: true, imported });
-  } catch (e) {
-    res.json({ ok: false, error: e.message });
+    res.json({
+      ok: true,
+      imported,
+      skipped,
+      imported_at,
+      message: `✅ Imported ${imported} students, skipped ${skipped}.`,
+    });
+
+  } catch (err) {
+    console.error("❌ Upload error:", err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// -------- ALL STUDENTS --------
-app.get("/api/students", async (req, res) => {
+// === Reports ===
+app.get('/api/report/subject/:id', async (req, res) => {
   try {
+    const subject_id = req.params.id;
     const pool = await getPool();
+
+    // ✅ Get sessions for that subject
+    const [sessions] = await pool.query(
+      `SELECT id, start_time, session_code 
+       FROM sessions 
+       WHERE subject_id = ? 
+       ORDER BY start_time`,
+      [subject_id]
+    );
+
+    if (sessions.length === 0) {
+      return res.json({ ok: true, sessions: [], students: [] });
+    }
+
+    // ✅ Get all attendance data for those sessions in one query
+    const sessionIds = sessions.map(s => s.id);
+    const [attendanceData] = await pool.query(
+      `SELECT a.session_id, s.id AS student_id, s.roll, s.full_name
+       FROM attendance a
+       JOIN students s ON a.student_id = s.id
+       WHERE a.session_id IN (?)
+       ORDER BY s.roll`,
+      [sessionIds]
+    );
+
+    // ✅ Get all students once
+    const [students] = await pool.query(`SELECT id, roll, full_name FROM students ORDER BY roll`);
+
+    // ✅ Build attendance map for quick lookup
+    const attendanceMap = new Map();
+    attendanceData.forEach(row => {
+      if (!attendanceMap.has(row.student_id)) attendanceMap.set(row.student_id, new Set());
+      attendanceMap.get(row.student_id).add(row.session_id);
+    });
+
+    // ✅ Fill attendance matrix
+    students.forEach(st => {
+      st.attendance = sessions.map(s =>
+        attendanceMap.get(st.id)?.has(s.id) ? '✔️' : '❌'
+      );
+    });
+
+    res.json({ ok: true, sessions, students });
+  } catch (err) {
+    console.error('Error in report/subject:', err);
+    res.json({ ok: false, error: err.message });
+  }
+});
+ // ✅ Live attendance fetch route
+app.get('/api/session/:session_code/attendance', async (req, res) => {
+  const { session_code } = req.params;
+
+  try {
+    // Get session_id from session_code
+    const [session] = await pool.query(
+      'SELECT id FROM sessions WHERE session_code = ?',
+      [session_code]
+    );
+    if (session.length === 0)
+      return res.json({ ok: false, msg: 'Invalid session code' });
+
+    const session_id = session[0].id;
+
+    // Fetch attendance records with student info
     const [rows] = await pool.query(`
-      SELECT s.id, s.roll, s.full_name, s.email, c.class_name
+      SELECT s.roll, s.full_name, DATE_FORMAT(a.timestamp, '%H:%i:%s') AS timestamp
+      FROM attendance a
+      JOIN students s ON a.student_id = s.id
+      WHERE a.session_id = ?
+      ORDER BY a.timestamp ASC
+    `, [session_id]);
+
+    res.json({ ok: true, attendance: rows });
+  } catch (err) {
+    console.error('Error fetching attendance:', err);
+    res.json({ ok: false, msg: 'Error fetching attendance' });
+  }
+});
+
+// ✅ API to fetch all students for Admin Panel
+app.get('/api/students', async (req, res) => {
+  try {
+    const pool = await getPool(); // ✅ FIX: use connection pool instead of "db"
+
+    const [rows] = await pool.query(`
+      SELECT s.id, s.roll, s.prn, s.full_name, s.contact, s.email, c.class_name
       FROM students s
-      LEFT JOIN classes c ON s.class_id=c.id
+      LEFT JOIN classes c ON s.class_id = c.id
       ORDER BY s.roll
     `);
+
     res.json({ ok: true, students: rows });
-  } catch (e) {
-    res.json({ ok: false, error: e.message });
+  } catch (err) {
+    console.error('Error fetching students:', err);
+    res.json({ ok: false, error: err.message });
   }
 });
 
-// Keep-alive to prevent Render sleeping
+// Keep-alive function
+// Keep-alive function
 setInterval(() => {
-  const url = (process.env.BASE_URL || "http://localhost:3000") + "/testdb";
-  https.get(url);
-}, 5 * 60 * 1000);
+  https.get('https://qr-attendance-2025.onrender.com/testdb', res => {
+    console.log('🌐 Pinged testdb to keep MySQL awake');
+  }).on('error', err => console.error('Ping error:', err.message));
+}, 5 * 60 * 1000); // every 5 minutes
 
-// Start server
+
+
+// === Start server ===
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on", PORT));
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+}); 
