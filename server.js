@@ -207,7 +207,6 @@ const qrDataUrl = await QRCode.toDataURL(qrLink);
     res.json({ ok: false, error: 'QR generation failed' });
   }
 });
-
 app.post('/api/record-attendance', async (req, res) => {
   try {
     const { session_code, token, roll, full_name, email, type } = req.body;
@@ -216,11 +215,15 @@ app.post('/api/record-attendance', async (req, res) => {
       return res.json({ ok: false, error: 'Missing fields' });
     }
 
-    // ✅ Validate session_code & token (example)
+    // ✅ Get database pool
+    const pool = await getPool();
+
+    // ✅ Validate session_code & session_token (your DB should have column 'session_token', not 'token')
     const [session] = await pool.query(
-      'SELECT * FROM sessions WHERE session_code=? AND token=?',
+      'SELECT * FROM sessions WHERE session_code = ? AND session_token = ?',
       [session_code, token]
     );
+
     if (!session.length) return res.json({ ok: false, error: 'Invalid session' });
 
     // ✅ Insert attendance
@@ -230,11 +233,13 @@ app.post('/api/record-attendance', async (req, res) => {
     );
 
     res.json({ ok: true });
+
   } catch (err) {
-    console.error(err);
+    console.error('Record attendance error:', err);
     res.json({ ok: false, error: 'Server error' });
   }
 });
+
 
 // === Upload Students ===
 app.post('/api/upload-students', async (req, res) => {
