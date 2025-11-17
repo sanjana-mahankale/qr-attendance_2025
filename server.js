@@ -215,25 +215,27 @@ app.post('/api/record-attendance', async (req, res) => {
       return res.json({ ok: false, error: 'Missing fields' });
     }
 
-    // ✅ Get database pool
     const pool = await getPool();
 
-    // ✅ Validate session_code & session_token (your DB should have column 'session_token', not 'token')
-    const [session] = await pool.query(
-      'SELECT * FROM sessions WHERE session_code = ? AND session_token = ?',
+    // Get the session_id from session_code & token
+    const [sessions] = await pool.query(
+      'SELECT id FROM sessions WHERE session_code = ? AND session_token = ?',
       [session_code, token]
     );
 
-    if (!session.length) return res.json({ ok: false, error: 'Invalid session' });
+    if (sessions.length === 0) {
+      return res.json({ ok: false, error: 'Invalid session' });
+    }
 
-    // ✅ Insert attendance
+    const session_id = sessions[0].id;
+
+    // Insert attendance using session_id
     await pool.query(
-      'INSERT INTO attendance (session_code, roll, full_name, email, type) VALUES (?, ?, ?, ?, ?)',
-      [session_code, roll, full_name, email, type]
+      'INSERT INTO attendance (session_id, roll, full_name, email, type) VALUES (?, ?, ?, ?, ?)',
+      [session_id, roll, full_name, email, type]
     );
 
     res.json({ ok: true });
-
   } catch (err) {
     console.error('Record attendance error:', err);
     res.json({ ok: false, error: 'Server error' });

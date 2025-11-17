@@ -111,6 +111,7 @@
 const params = new URLSearchParams(window.location.search);
 const session_code = params.get('session_code');
 const token = params.get('token');
+const baseUrl = window.location.origin; // declare once here
 
 if (!session_code || !token) {
   document.body.innerHTML = "<h2 style='color:red;text-align:center;'>Invalid QR code!</h2>";
@@ -131,7 +132,6 @@ document.getElementById('submitBtn').onclick = async () => {
   document.getElementById('result').innerHTML = '⏳ Submitting...';
 
   try {
-    const baseUrl = window.location.origin;
     const res = await fetch(`${baseUrl}/api/record-attendance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
