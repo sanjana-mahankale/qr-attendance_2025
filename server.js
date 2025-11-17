@@ -209,36 +209,43 @@ const qrDataUrl = await QRCode.toDataURL(qrLink);
 });
 app.post('/api/record-attendance', async (req, res) => {
   try {
-    const { session_code, token, roll, full_name, email, type } = req.body;
+    const { session_code, roll, full_name, email, type } = req.body;
 
-    if (!session_code || !token || !roll || !full_name || !email || !type) {
-      return res.json({ ok: false, error: 'Missing fields' });
+    if (!session_code || !roll || !full_name || !email || !type) {
+      return res.status(400).json({ ok: false, error: 'Missing fields' });
     }
 
     const pool = await getPool();
 
-    // Get the session_id from session_code & token
+    // 1️⃣ Get session_id from session_code
     const [sessions] = await pool.query(
-      'SELECT id FROM sessions WHERE session_code = ? AND session_token = ?',
-      [session_code, token]
+      'SELECT id FROM sessions WHERE session_code = ?',
+      [session_code]
     );
-
-    if (sessions.length === 0) {
-      return res.json({ ok: false, error: 'Invalid session' });
-    }
-
+    if (!sessions.length) return res.json({ ok: false, error: 'Invalid session_code' });
     const session_id = sessions[0].id;
 
-    // Insert attendance using session_id
-    await pool.query(
-      'INSERT INTO attendance (session_id, roll, full_name, email, type) VALUES (?, ?, ?, ?, ?)',
-      [session_id, roll, full_name, email, type]
+    // 2️⃣ Get student_id from roll
+    const [students] = await pool.query(
+      'SELECT id FROM students WHERE roll = ?',
+      [roll]
     );
+    if (!students.length) return res.json({ ok: false, error: 'Student not found' });
+    const student_id = students[0].id;
 
-    res.json({ ok: true });
+    // 3️⃣ Insert attendance
+    await pool.query(
+  `INSERT INTO attendance (session_id, student_id, roll, full_name, email, type)
+   VALUES (?, ?, ?, ?, ?, ?)`,
+  [session_id, student_id, roll, full_name, email, type]
+);
+
+
+    res.json({ ok: true, message: 'Attendance recorded ✅' });
+
   } catch (err) {
     console.error('Record attendance error:', err);
-    res.json({ ok: false, error: 'Server error' });
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
