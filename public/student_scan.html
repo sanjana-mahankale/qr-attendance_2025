@@ -44,6 +44,12 @@
   </div>
 
   <div id="result" class="info"></div>
+  <label>Session Type</label>
+<select id="sessionType">
+  <option value="Lecture">Lecture</option>
+  <option value="Practical">Practical</option>
+</select>
+
 
   <script>
     // ✅ Extract QR parameters
@@ -66,6 +72,21 @@
         document.getElementById('result').innerHTML = '<span class="error">Missing fields</span>';
         return;
       }
+
+      const sessionType = document.getElementById('sessionType').value;
+
+const res = await fetch(`${baseUrl}/api/record-attendance`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    session_code: session_code,
+    token: token,
+    roll: rollNo,
+    full_name: fullName,
+    email: email,
+    type: sessionType  // Lecture ya Practical
+  })
+});
 
       document.getElementById('result').innerHTML = '⏳ Submitting...';
 

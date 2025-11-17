@@ -1,245 +1,215 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin Dashboard</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: #f5f7fa;
-      color: #333;
-    }
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Dashboard</title>
+<style>
+* { box-sizing: border-box; }
+body { margin:0; font-family: Arial, sans-serif; background-color: #f5f7fa; color:#333; }
 
-    /* Sidebar */
-    .sidebar {
-      position: fixed;
-      top: 0; left: 0;
-      width: 220px;
-      height: 100vh;
-      background-color: #1e3a8a;
-      color: white;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-    }
-    .sidebar h2 {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .sidebar button {
-      background: transparent;
-      border: none;
-      color: white;
-      padding: 12px;
-      text-align: left;
-      font-size: 16px;
-      cursor: pointer;
-      border-radius: 8px;
-      margin-bottom: 8px;
-    }
-    .sidebar button:hover, .sidebar button.active {
-      background-color: #2563eb;
-    }
+.sidebar { position: fixed; top:0; left:0; width:220px; height:100vh; background-color:#1e3a8a; color:white; padding:20px; display:flex; flex-direction:column; }
+.sidebar h2 { text-align:center; margin-bottom:30px; }
+.sidebar button { background:transparent; border:none; color:white; padding:12px; text-align:left; font-size:16px; cursor:pointer; border-radius:8px; margin-bottom:8px; }
+.sidebar button:hover, .sidebar button.active { background-color:#2563eb; }
 
-    /* Main content */
-    .main {
-      margin-left: 240px;
-      padding: 20px;
-    }
-    h2, h3 {
-      color: #1e3a8a;
-    }
+.main { margin-left:240px; padding:20px; }
+h2,h3 { color:#1e3a8a; }
+label { font-weight:bold; margin-top:10px; display:block; }
+input, select, button { width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:6px; }
+button.action { background-color:#2563eb; color:white; border:none; margin-top:10px; cursor:pointer; border-radius:6px; }
+button.action:hover { background-color:#1d4ed8; }
 
-    label {
-      font-weight: bold;
-      margin-top: 10px;
-      display: block;
-    }
-    input, select, button {
-      width: 100%;
-      padding: 8px;
-      margin-top: 5px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-    }
+.card { background:white; border-radius:10px; padding:20px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+table { width:100%; border-collapse: collapse; margin-top:10px; }
+th, td { border:1px solid #ddd; padding:8px; text-align:center; }
+th { background-color:#2563eb; color:white; }
+tr:nth-child(even) { background-color:#f2f2f2; }
 
-    button.action {
-      background-color: #2563eb;
-      color: white;
-      border: none;
-      margin-top: 10px;
-      cursor: pointer;
-      border-radius: 6px;
-    }
-    button.action:hover {
-      background-color: #1d4ed8;
-    }
-
-    /* Cards */
-    .card {
-      background: white;
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    /* Table */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-    }
-    th {
-      background-color: #2563eb;
-      color: white;
-    }
-    tr:nth-child(even) { background-color: #f2f2f2; }
-
-    @media (max-width: 768px) {
-      .sidebar {
-        width: 100%;
-        height: auto;
-        flex-direction: row;
-      }
-      .main {
-        margin-left: 0;
-        padding-top: 100px;
-      }
-    }
-  </style>
+@media(max-width:768px){ .sidebar{width:100%; height:auto; flex-direction:row;} .main{margin-left:0; padding-top:100px;} }
+</style>
 </head>
 <body>
-  <div class="sidebar">
-    <h2>Admin Panel</h2>
-    <button class="active" onclick="showSection('reports')">📊 Reports</button>
-    <button onclick="showSection('defaulters')">⚠️ Defaulters</button>
-    <button onclick="showSection('students')">🎓 Students</button>
+
+<div class="sidebar">
+<h2>Admin Panel</h2>
+<button class="active" onclick="showSection('reports', event)">📊 Reports</button>
+<button onclick="showSection('defaulters', event)">⚠️ Defaulters</button>
+<button onclick="showSection('students', event)">🎓 Students</button>
+</div>
+
+<div class="main">
+  <!-- Reports Section -->
+  <div id="reports" class="card section">
+    <h2>Subject Reports</h2>
+    <label>Subject</label>
+    <select id="subject"></select>
+    <button class="action" id="getReport">Get Subject Report</button>
+    <div id="reportArea"></div>
   </div>
 
-  <div class="main">
-    <!-- Reports Section -->
-    <div id="reports" class="card section">
-      <h2>Subject Reports</h2>
-      <label>Subject</label>
-      <select id="subject"></select>
-      <button class="action" id="getReport">Get Subject Report</button>
-      <div id="reportArea"></div>
-    </div>
-
-    <!-- Defaulters Section -->
-    <div id="defaulters" class="card section" style="display:none;">
-      <h2>Defaulters</h2>
-      <label>From (YYYY-MM-DD)</label><input id="from" />
-      <label>To (YYYY-MM-DD)</label><input id="to" />
-      <label>Threshold %</label><input id="threshold" value="75" />
-      <button class="action" id="getDef">Get Defaulters (All Subjects)</button>
-      <div id="defArea"></div>
-    </div>
-
-    <!-- Students Section -->
-    <div id="students" class="card section" style="display:none;">
-      <h2>Uploaded Students</h2>
-      <button class="action" id="getStudents">Show Students</button>
-      <div id="studentArea"></div>
-    </div>
+  <!-- Defaulters Section -->
+  <div id="defaulters" class="card section" style="display:none;">
+    <h2>Defaulters</h2>
+    <label>From (YYYY-MM-DD)</label><input id="from">
+    <label>To (YYYY-MM-DD)</label><input id="to">
+    <label>Threshold %</label><input id="threshold" value="75">
+    <button class="action" id="getDef">Get Defaulters (Subject-wise)</button>
+    <div id="defArea"></div>
   </div>
 
-  <script>
-    function showSection(id) {
-      document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
-      document.getElementById(id).style.display = 'block';
-      document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
-    }
+  <!-- Students Section -->
+  <div id="students" class="card section" style="display:none;">
+    <h2>Uploaded Students</h2>
+    <button class="action" id="getStudents">Show Students</button>
+    <div id="studentArea"></div>
+  </div>
+</div>
 
-    // Load subjects
-    async function loadMeta(){
-      const r = await fetch('/api/meta'); const j = await r.json();
-      if (j.ok){
-        const s = document.getElementById('subject');
-        s.innerHTML = '<option value="">-- select --</option>';
-        j.subjects.forEach(x=> s.appendChild(new Option(x.subject_name,x.id)));
-      }
-    }
-    loadMeta();
+<script>
+// Sidebar navigation
+function showSection(id, event){
+  document.querySelectorAll('.section').forEach(s=>s.style.display='none');
+  document.getElementById(id).style.display='block';
+  document.querySelectorAll('.sidebar button').forEach(b=>b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
 
-    // Reports
-    document.getElementById('getReport').addEventListener('click', async ()=>{
-      const subject_id = document.getElementById('subject').value;
-      if (!subject_id) return alert('Select subject');
-      const r = await fetch('/api/report/subject/'+subject_id);
-      const j = await r.json();
-      if (!j.ok) return alert('Error loading data');
-      let html = '<h3>Sessions</h3><table><tr><th>Date</th><th>Title</th></tr>';
-      j.sessions.forEach(s=> html += `<tr><td>${s.start_time}</td><td>${s.title||''}</td></tr>`);
-      html += '</table>';
-      html += '<h3>Student Attendance</h3>';
-      if (j.students.length===0) html += '<p>No attendance records</p>'; 
-      else {
-        html += '<table><tr><th>Roll</th><th>Name</th>';
-        j.sessions.forEach((s,idx)=> html += `<th>Lecture ${idx+1}</th>`);
-        html += '</tr>';
-        j.students.forEach(st=>{
-          html += `<tr><td>${st.roll}</td><td>${st.full_name}</td>`;
-          st.attendance.forEach(a=> html += `<td>${a}</td>`);
-          html += '</tr>';
+// Load subjects
+async function loadMeta(){
+  try{
+    const r = await fetch('/api/meta');
+    const j = await r.json();
+    if(j.ok){
+      const s = document.getElementById('subject');
+      s.innerHTML='<option value="">-- select --</option>';
+      j.subjects.forEach(x=>s.appendChild(new Option(x.subject_name, x.id)));
+    }
+  }catch(err){ console.error(err); }
+}
+loadMeta();
+
+// Get Subject Report
+document.getElementById('getReport').addEventListener('click', async ()=> {
+  const subject_id = document.getElementById('subject').value;
+  if(!subject_id) return alert('Select subject');
+
+  try {
+    const r = await fetch('/api/report/subject/'+subject_id);
+    const j = await r.json();
+    if(!j.ok) return alert('Error loading data');
+
+    // Sessions Table
+    let html = '<h3>Sessions</h3><table><tr><th>Date</th><th>Title</th></tr>';
+    j.sessions.forEach(s => html += `<tr><td>${new Date(s.start_time).toLocaleString()}</td><td>${s.title||''}</td></tr>`);
+    html += '</table>';
+
+    // Students Attendance Table
+    html += '<h3>Student Attendance</h3>';
+    if(j.students.length === 0) html += '<p>No attendance records</p>';
+    else {
+      html += '<table><tr><th>Sr No</th><th>Name</th><th>TH</th><th>PR</th><th>Total</th><th>%</th></tr>';
+      j.students.forEach((st, idx) => {
+        let thCount = 0, prCount = 0;
+        st.attendance.forEach(a => {
+          if(a === 'TH' || a === 1) thCount++;
+          if(a === 'PR' || a === '✔️') prCount++;
         });
-        html += '</table>';
-      }
-      document.getElementById('reportArea').innerHTML = html;
-    });
-
-    // Defaulters
-    document.getElementById('getDef').addEventListener('click', async ()=>{
-      const from = document.getElementById('from').value;
-      const to = document.getElementById('to').value;
-      const threshold = document.getElementById('threshold').value;
-      const params = new URLSearchParams();
-      if (from) params.set('from', from);
-      if (to) params.set('to', to);
-      if (threshold) params.set('threshold', threshold);
-      const r = await fetch('/api/defaulters/all?'+params.toString());
-      const j = await r.json();
-      if (!j.ok) return alert('Error fetching defaulters');
-      if (j.defaulters.length===0) document.getElementById('defArea').innerHTML = '<p>No defaulters found</p>';
-      else {
-        let html = '<table><tr><th>Roll</th><th>Name</th><th>% Present</th><th>Present</th><th>Total</th></tr>';
-        j.defaulters.forEach(d=> html += `<tr><td>${d.roll}</td><td>${d.full_name}</td><td>${d.percent.toFixed(1)}</td><td>${d.present_count}</td><td>${d.totalSessions}</td></tr>`);
-        html += '</table>';
-        document.getElementById('defArea').innerHTML = html;
-      }
-    });
-
-    // Students
-    document.getElementById('getStudents').addEventListener('click', async ()=>{
-      const r = await fetch('/api/students');
-      const j = await r.json();
-      if (!j.ok) return alert('Error loading students');
-      if (j.students.length === 0) {
-        document.getElementById('studentArea').innerHTML = '<p>No students found</p>';
-        return;
-      }
-      let html = '<table><tr><th>Roll</th><th>PRN</th><th>Name</th><th>Contact</th><th>Email</th><th>Class</th></tr>';
-      j.students.forEach(s=>{
+        const total = thCount + prCount;
+        const percent = j.sessions.length ? ((total / (j.sessions.length*2)) * 100).toFixed(0) : 0;
         html += `<tr>
-          <td>${s.roll}</td>
-          <td>${s.prn}</td>
-          <td>${s.full_name}</td>
-          <td>${s.contact || ''}</td>
-          <td>${s.email || ''}</td>
-          <td>${s.class_name || ''}</td>
+          <td>${idx+1}</td>
+          <td>${st.name || st.full_name || 'N/A'}</td>
+          <td>${thCount}</td>
+          <td>${prCount}</td>
+          <td>${total}</td>
+          <td>${percent}</td>
         </tr>`;
       });
       html += '</table>';
-      document.getElementById('studentArea').innerHTML = html;
+    }
+
+    document.getElementById('reportArea').innerHTML = html;
+
+  } catch(err) {
+    console.error(err);
+    alert('Failed to fetch report');
+  }
+});
+
+// Subject-wise Defaulters
+async function getSubjectDefaulters(){
+  const subject_id = document.getElementById('subject').value;
+  const threshold = document.getElementById('threshold').value || 75;
+  if(!subject_id) return alert('Select a subject');
+
+  try {
+    const r = await fetch(`/api/defaulters/subject/${subject_id}?threshold=${threshold}`);
+    const j = await r.json();
+    if(!j.ok) return alert('Error: '+j.error);
+
+    const defArea = document.getElementById('defArea');
+    if(j.defaulters.length===0){
+      defArea.innerHTML='<p>No defaulters found</p>';
+      return;
+    }
+
+    let html = '<table><tr><th>Sr No</th><th>Roll No</th><th>Name</th><th>Subject</th><th>TH</th><th>PR</th><th>TOTAL</th><th>%</th></tr>';
+    j.defaulters.forEach((d, idx)=>{
+      html+=`<tr>
+        <td>${idx+1}</td>
+        <td>${d.roll}</td>
+        <td>${d.name}</td>
+        <td>${d.subject}</td>
+        <td>${d.TH}</td>
+        <td>${d.PR}</td>
+        <td>${d.TOTAL}</td>
+        <td>${d.percent}</td>
+      </tr>`;
     });
-  </script>
+    html+='</table>';
+    defArea.innerHTML=html;
+
+  } catch(err){
+    console.error(err);
+    alert('Failed to fetch defaulters');
+  }
+}
+
+// Hook to your button
+document.getElementById('getDef').addEventListener('click', getSubjectDefaulters);
+
+// Get Students
+document.getElementById('getStudents').addEventListener('click', async ()=>{
+  try{
+    const r = await fetch('/api/students');
+    const j = await r.json();
+    if(!j.ok) return alert('Error loading students');
+
+    if(j.students.length===0){
+      document.getElementById('studentArea').innerHTML='<p>No students found</p>';
+      return;
+    }
+
+    let html='<table><tr><th>Roll</th><th>PRN</th><th>Name</th><th>Contact</th><th>Email</th><th>Class</th></tr>';
+    j.students.forEach(s=>{
+      html+=`<tr>
+        <td>${s.roll}</td>
+        <td>${s.prn}</td>
+        <td>${s.full_name}</td>
+        <td>${s.contact||''}</td>
+        <td>${s.email||''}</td>
+        <td>${s.class_name||''}</td>
+      </tr>`;
+    });
+    html+='</table>';
+    document.getElementById('studentArea').innerHTML=html;
+
+  }catch(err){ console.error(err); alert('Failed to fetch students'); }
+});
+
+
+
+</script>
+
 </body>
 </html>

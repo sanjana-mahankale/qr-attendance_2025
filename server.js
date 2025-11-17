@@ -208,67 +208,42 @@ const qrDataUrl = await QRCode.toDataURL(qrLink);
   }
 });
 
-// === Record attendance ===
 app.post('/api/record-attendance', async (req, res) => {
-  const { session_code, token, roll, full_name, email } = req.body;
-  if (!session_code || !token || !roll || !full_name || !email)
-    return res.json({ ok: false, error: 'Missing field' });
-
   try {
-    const pool = await getPool();
+    const { session_code, token, roll, full_name, email, type } = req.body;
 
-    // ✅ Validate session
-    const [sessions] = await pool.query(
-      'SELECT * FROM sessions WHERE session_code = ? AND session_token = ?',
+    if (!session_code || !token || !roll || !full_name || !email || !type) {
+      return res.json({ ok: false, error: 'Missing fields' });
+    }
+
+    // ✅ Validate session_code & token (example)
+    const [session] = await pool.query(
+      'SELECT * FROM sessions WHERE session_code=? AND token=?',
       [session_code, token]
     );
-    if (sessions.length === 0) return res.json({ ok: false, error: 'Invalid or expired session' });
-    const session = sessions[0];
+    if (!session.length) return res.json({ ok: false, error: 'Invalid session' });
 
-    // ✅ Get the latest uploaded batch for the student's class
-    const [latestBatch] = await pool.query(
-      'SELECT MAX(imported_at) AS latest_import FROM students WHERE class_id = ?',
-      [session.class_id]
-    );
-    const latest_imported_at = latestBatch[0].latest_import;
-
-    // ✅ Check if scanned email exists in latest batch
-    const [students] = await pool.query(
-      'SELECT * FROM students WHERE email = ? AND imported_at = ?',
-      [email, latest_imported_at]
-    );
-
-    if (students.length === 0) {
-      return res.json({ ok: false, error: 'Email not matched with uploaded file' });
-    }
-
-    const student_id = students[0].id;
-
-    // ✅ Mark attendance
+    // ✅ Insert attendance
     await pool.query(
-      `INSERT INTO attendance (session_id, student_id, roll, full_name, email, status)
-       VALUES (?, ?, ?, ?, ?, 'Present')
-       ON DUPLICATE KEY UPDATE status = 'Present'`,
-      [session.id, student_id, roll, full_name, email]
+      'INSERT INTO attendance (session_code, roll, full_name, email, type) VALUES (?, ?, ?, ?, ?)',
+      [session_code, roll, full_name, email, type]
     );
 
-    res.json({ ok: true, message: 'Attendance marked successfully' });
-
+    res.json({ ok: true });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.json({ ok: false, error: 'Already marked attendance' });
-    }
-    console.error('Attendance error:', err);
-    res.json({ ok: false, error: 'Database error' });
+    console.error(err);
+    res.json({ ok: false, error: 'Server error' });
   }
 });
-
 
 // === Upload Students ===
 app.post('/api/upload-students', async (req, res) => {
   try {
     const file = req.files?.file;
     const class_id = req.body.class_id;
+    const created_by = req.body.created_by || 'Unknown';
+    const mode = req.body.mode || 'merge';
+
     if (!file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
     if (!class_id) return res.status(400).json({ ok: false, error: 'Missing class_id' });
 
@@ -276,51 +251,84 @@ app.post('/api/upload-students', async (req, res) => {
     const pool = await getPool();
 
     let imported = 0, skipped = 0;
-    const imported_at = new Date(); // timestamp for this batch
+   const headers = Object.keys(records[0]).map(h => h.trim());
+     console.log('Cleaned Headers:', headers);
 
-    for (const row of records) {
-      const normalized = {};
-      for (const key in row) normalized[key.trim().toLowerCase()] = row[key];
+    // inner try block
+    try {
+      for (const row of records) {
+        const normalized = {};
+        for (const key in row) {
+          normalized[key.trim().toLowerCase()] = row[key];
+        }
 
-      const roll = normalized.roll || '';
-      const prn = normalized.prn || '';
-      const full_name = normalized.full_name || '';
-      const contact = normalized.contact || '';
-      const email = normalized.email || '';
+        const roll = normalized.roll || '';
+        const prn = normalized.prn || '';
+        const full_name = normalized.full_name || '';
+        const contact = normalized.contact || '';
+        const email = normalized.email || '';
 
-      if (!roll || !full_name) {
-        skipped++;
-        continue;
+        if (!roll || !full_name) {
+          skipped++;
+          continue;
+        }
+
+        await pool.query(
+          `INSERT INTO students (roll, prn, full_name, contact, email, class_id)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             prn = VALUES(prn),
+             full_name = VALUES(full_name),
+             contact = VALUES(contact),
+             email = VALUES(email),
+             class_id = VALUES(class_id)`,
+          [roll, prn, full_name, contact, email, class_id]
+        );
+        imported++;
       }
 
-      await pool.query(
-        `INSERT INTO students (roll, prn, full_name, contact, email, class_id, imported_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           prn = VALUES(prn),
-           full_name = VALUES(full_name),
-           contact = VALUES(contact),
-           email = VALUES(email),
-           class_id = VALUES(class_id),
-           imported_at = VALUES(imported_at)`,
-        [roll, prn, full_name, contact, email, class_id, imported_at]
-      );
-      imported++;
+      res.json({
+        ok: true,
+        imported,
+        skipped,
+        message: `✅ Imported ${imported} students, skipped ${skipped}.`,
+      });
+    } catch (e) {
+      console.error("❌ Upload error:", e);
+      res.status(500).json({ ok: false, error: e.message });
     }
 
-    res.json({
-      ok: true,
-      imported,
-      skipped,
-      imported_at,
-      message: `✅ Imported ${imported} students, skipped ${skipped}.`,
-    });
-
   } catch (err) {
-    console.error("❌ Upload error:", err);
+    console.error("❌ Outer error:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+}); // ✅ this was missing!
+
+
+
+// ✅ Get all students for a class (for admin panel)
+app.get('/api/students', async (req, res) => {
+  try {
+    const class_id = req.query.class_id;
+
+    const pool = await getPool();
+    let query = 'SELECT s.*, c.class_name FROM students s LEFT JOIN classes c ON s.class_id = c.id';
+    const params = [];
+    if (class_id) {
+      query += ' WHERE s.class_id = ?';
+      params.push(class_id);
+    }
+    query += ' ORDER BY s.roll';
+
+    const [students] = await pool.query(query, params);
+    res.json({ ok: true, students });
+  } catch (err) {
+    console.error('Fetch students error:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+
 
 // === Reports ===
 app.get('/api/report/subject/:id', async (req, res) => {
@@ -375,11 +383,156 @@ app.get('/api/report/subject/:id', async (req, res) => {
     res.json({ ok: false, error: err.message });
   }
 });
+
+// ✅ Get overall defaulters (across all subjects)
+// ✅ Subject-wise defaulters
+app.get('/api/defaulters/subject/:subject_id', async (req, res) => {
+  try {
+    const subject_id = req.params.subject_id;
+    const threshold = parseFloat(req.query.threshold) || 75;
+
+    const pool = await getPool();
+
+    // 1️⃣ Get sessions for this subject
+    const [sessions] = await pool.query(
+      `SELECT id, session_type FROM sessions WHERE subject_id = ?`,
+      [subject_id]
+    );
+    if (sessions.length === 0) return res.json({ ok:true, defaulters: [] });
+
+    const sessionIds = sessions.map(s => s.id);
+    const totalTH = sessions.filter(s => s.session_type === 'TH').length;
+    const totalPR = sessions.filter(s => s.session_type === 'PR').length;
+
+    // 2️⃣ Get students who belong to the classes of these sessions
+    const [students] = await pool.query(
+      `SELECT DISTINCT s.id, s.roll, s.full_name, c.class_name
+       FROM students s
+       JOIN classes c ON s.class_id = c.id
+       JOIN sessions sess ON sess.class_id = s.class_id
+       WHERE sess.subject_id = ?`,
+      [subject_id]
+    );
+
+    // 3️⃣ Get attendance
+    const [attendance] = await pool.query(
+      `SELECT student_id, session_id FROM attendance WHERE session_id IN (?)`,
+      [sessionIds]
+    );
+
+    // Build attendance map
+    const attendanceMap = new Map();
+    attendance.forEach(a => {
+      if (!attendanceMap.has(a.student_id)) attendanceMap.set(a.student_id, new Set());
+      attendanceMap.get(a.student_id).add(a.session_id);
+    });
+
+    // 4️⃣ Calculate TH, PR, TOTAL, %
+    const defaulters = students.map((st, idx) => {
+      const presentSessions = attendanceMap.get(st.id) || new Set();
+      const th = sessions.filter(s => s.session_type === 'TH' && presentSessions.has(s.id)).length;
+      const pr = sessions.filter(s => s.session_type === 'PR' && presentSessions.has(s.id)).length;
+      const total = th + pr;
+      const percent = sessionIds.length ? (total / sessionIds.length * 100).toFixed(2) : 0;
+
+      return {
+        sr_no: idx + 1,
+        roll: st.roll,
+        name: st.full_name,
+        subject: st.class_name, // or you can fetch subject name separately
+        TH: th,
+        PR: pr,
+        TOTAL: total,
+        percent
+      };
+    }).filter(s => s.percent < threshold); // Only defaulters
+
+    res.json({ ok:true, defaulters });
+
+  } catch (err) {
+    console.error('Subject defaulters error:', err);
+    res.json({ ok:false, error: err.message });
+  }
+});
+
+// ✅ All subjects + students attendance summary
+app.get('/api/subjects-students-summary', async (req, res) => {
+  try {
+    const pool = await getPool();
+
+    // 1️⃣ Get all subjects
+    const [subjects] = await pool.query(`SELECT id, subject_name FROM subjects ORDER BY id`);
+
+    const result = [];
+
+    for (const sub of subjects) {
+      // 2️⃣ Get sessions for this subject
+      const [sessions] = await pool.query(
+        `SELECT id, session_type FROM sessions WHERE subject_id = ?`,
+        [sub.id]
+      );
+
+      if (sessions.length === 0) continue;
+
+      const sessionIds = sessions.map(s => s.id);
+      const totalTH = sessions.filter(s => s.session_type === 'TH').length;
+      const totalPR = sessions.filter(s => s.session_type === 'PR').length;
+
+      // 3️⃣ Get all students who attended these sessions
+      const [students] = await pool.query(
+        `SELECT s.id, s.roll, s.full_name
+         FROM students s
+         JOIN classes c ON s.class_id = c.id
+         WHERE c.id IN (SELECT DISTINCT class_id FROM sessions WHERE id IN (?))`,
+        [sessionIds]
+      );
+
+      // 4️⃣ Get attendance records for these sessions
+      const [attendance] = await pool.query(
+        `SELECT student_id, session_id FROM attendance WHERE session_id IN (?)`,
+        [sessionIds]
+      );
+
+      const attendanceMap = new Map();
+      attendance.forEach(a => {
+        if (!attendanceMap.has(a.student_id)) attendanceMap.set(a.student_id, new Set());
+        attendanceMap.get(a.student_id).add(a.session_id);
+      });
+
+      // 5️⃣ Build student attendance summary
+      students.forEach((st, idx) => {
+        const attendedCount = attendanceMap.get(st.id)?.size || 0;
+        const percent = sessionIds.length ? (attendedCount / sessionIds.length) * 100 : 0;
+
+        result.push({
+          sr_no: idx + 1,
+          roll: st.roll,
+          name: st.full_name,
+          subject: sub.subject_name,
+          TH: totalTH,
+          PR: totalPR,
+          TOTAL: totalTH + totalPR,
+          percent: percent.toFixed(2)
+        });
+      });
+    }
+
+    res.json({ ok: true, data: result });
+
+  } catch (err) {
+    console.error(err);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+
  // ✅ Live attendance fetch route
 app.get('/api/session/:session_code/attendance', async (req, res) => {
   const { session_code } = req.params;
 
   try {
+    const pool = await getPool(); // ✅ Add this line
+
     // Get session_id from session_code
     const [session] = await pool.query(
       'SELECT id FROM sessions WHERE session_code = ?',
@@ -403,25 +556,6 @@ app.get('/api/session/:session_code/attendance', async (req, res) => {
   } catch (err) {
     console.error('Error fetching attendance:', err);
     res.json({ ok: false, msg: 'Error fetching attendance' });
-  }
-});
-
-// ✅ API to fetch all students for Admin Panel
-app.get('/api/students', async (req, res) => {
-  try {
-    const pool = await getPool(); // ✅ FIX: use connection pool instead of "db"
-
-    const [rows] = await pool.query(`
-      SELECT s.id, s.roll, s.prn, s.full_name, s.contact, s.email, c.class_name
-      FROM students s
-      LEFT JOIN classes c ON s.class_id = c.id
-      ORDER BY s.roll
-    `);
-
-    res.json({ ok: true, students: rows });
-  } catch (err) {
-    console.error('Error fetching students:', err);
-    res.json({ ok: false, error: err.message });
   }
 });
 
