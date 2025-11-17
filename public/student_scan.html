@@ -1,36 +1,92 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Student Attendance Form</title>
-  <style>
-    body {
-      font-family: Arial;
-      padding: 16px;
-      max-width: 500px;
-      margin: auto;
-    }
-    input, button {
-      width: 100%;
-      padding: 10px;
-      margin-top: 10px;
-      font-size: 16px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-    }
-    .info {
-      margin-top: 20px;
-      font-weight: bold;
-      text-align: center;
-    }
-    .success { color: green; }
-    .error { color: red; }
-  </style>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Student Attendance Form</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f0f4f8;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+  }
+
+  .container {
+    background: #fff;
+    margin-top: 50px;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 450px;
+  }
+
+  h2 {
+    text-align: center;
+    color: #1e3a8a;
+    margin-bottom: 20px;
+  }
+
+  label {
+    font-weight: 600;
+    margin-top: 15px;
+    display: block;
+    color: #333;
+  }
+
+  input, select, button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 8px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+  }
+
+  input:focus, select:focus {
+    outline: none;
+    border-color: #1e3a8a;
+    box-shadow: 0 0 5px rgba(30,58,138,0.3);
+  }
+
+  button {
+    background-color: #1e3a8a;
+    color: white;
+    border: none;
+    margin-top: 20px;
+    cursor: pointer;
+    transition: 0.3s;
+  }
+
+  button:hover {
+    background-color: #2563eb;
+  }
+
+  .info {
+    margin-top: 20px;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .success { color: green; }
+  .error { color: red; }
+
+  @media(max-width:480px){
+    .container { padding: 20px; margin-top: 30px; }
+    h2 { font-size: 22px; }
+    input, select, button { font-size: 15px; padding: 10px; }
+  }
+</style>
 </head>
 <body>
-  <h2>Student Attendance Form</h2>
-  
-  <div id="formArea">
+  <div class="container">
+    <h2>Student Attendance Form</h2>
+
     <label>Full Name</label>
     <input id="fullName" placeholder="e.g. Riya Sharma" />
 
@@ -40,86 +96,68 @@
     <label>Email (College Email)</label>
     <input id="email" placeholder="e.g. student@college.edu" />
 
+    <label>Session Type</label>
+    <select id="sessionType">
+      <option value="Lecture">Lecture</option>
+      <option value="Practical">Practical</option>
+    </select>
+
     <button id="submitBtn">Submit Attendance</button>
+
+    <div id="result" class="info"></div>
   </div>
 
-  <div id="result" class="info"></div>
-  <label>Session Type</label>
-<select id="sessionType">
-  <option value="Lecture">Lecture</option>
-  <option value="Practical">Practical</option>
-</select>
+<script>
+const params = new URLSearchParams(window.location.search);
+const session_code = params.get('session_code');
+const token = params.get('token');
 
+if (!session_code || !token) {
+  document.body.innerHTML = "<h2 style='color:red;text-align:center;'>Invalid QR code!</h2>";
+  throw new Error('Invalid QR code');
+}
 
-  <script>
-    // ✅ Extract QR parameters
-    const params = new URLSearchParams(window.location.search);
-    const session_code = params.get('session_code');
-    const token = params.get('token');
+document.getElementById('submitBtn').onclick = async () => {
+  const fullName = document.getElementById('fullName').value.trim();
+  const rollNo = document.getElementById('rollNo').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const sessionType = document.getElementById('sessionType').value;
 
-    // ✅ Validate QR data
-    if (!session_code || !token) {
-      document.body.innerHTML = "<h2 style='color:red;text-align:center;'>Invalid QR code!</h2>";
-      throw new Error('Invalid QR code');
+  if (!fullName || !rollNo || !email) {
+    document.getElementById('result').innerHTML = '<span class="error">Missing fields</span>';
+    return;
+  }
+
+  document.getElementById('result').innerHTML = '⏳ Submitting...';
+
+  try {
+    const baseUrl = window.location.origin;
+    const res = await fetch(`${baseUrl}/api/record-attendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_code,
+        token,
+        roll: rollNo,
+        full_name: fullName,
+        email,
+        type: sessionType
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      document.getElementById('result').innerHTML = '<span class="success">✅ Attendance marked successfully!</span>';
+      document.getElementById('submitBtn').disabled = true;
+    } else {
+      document.getElementById('result').innerHTML = '<span class="error">' + (data.error || 'Failed to mark attendance') + '</span>';
     }
-
-    document.getElementById('submitBtn').onclick = async () => {
-      const fullName = document.getElementById('fullName').value.trim();
-      const rollNo = document.getElementById('rollNo').value.trim();
-      const email = document.getElementById('email').value.trim();
-
-      if (!fullName || !rollNo || !email) {
-        document.getElementById('result').innerHTML = '<span class="error">Missing fields</span>';
-        return;
-      }
-
-      const sessionType = document.getElementById('sessionType').value;
-
-const res = await fetch(`${baseUrl}/api/record-attendance`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    session_code: session_code,
-    token: token,
-    roll: rollNo,
-    full_name: fullName,
-    email: email,
-    type: sessionType  // Lecture ya Practical
-  })
-});
-
-      document.getElementById('result').innerHTML = '⏳ Submitting...';
-
-      try {
-        const baseUrl = window.location.origin; // works for localhost & Render
-        const res = await fetch(`${baseUrl}/api/record-attendance`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_code: session_code,
-            token: token,
-            roll: rollNo,        // ✅ backend expects "roll", not "roll_no"
-            full_name: fullName,
-            email: email
-          })
-        });
-
-        const data = await res.json();
-
-        if (data.ok) {
-          document.getElementById('result').innerHTML =
-            '<span class="success">✅ Attendance marked successfully!</span>';
-          document.getElementById('submitBtn').disabled = true;
-        } else {
-          document.getElementById('result').innerHTML =
-            '<span class="error">' + (data.error || 'Failed to mark attendance') + '</span>';
-        }
-      } catch (err) {
-        console.error(err);
-        document.getElementById('result').innerHTML =
-          '<span class="error">Network error — please try again.</span>';
-      }
-    };
-  </script>
+  } catch (err) {
+    console.error(err);
+    document.getElementById('result').innerHTML = '<span class="error">Network error — please try again.</span>';
+  }
+};
+</script>
 </body>
 </html>
